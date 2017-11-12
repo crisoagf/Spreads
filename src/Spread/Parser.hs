@@ -1,75 +1,81 @@
 {-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
 module Spread.Parser where
 import Spread.TypesAndVals
-import qualified Data.Text as T
+import qualified Data.Text.Lazy as T
 import Text.Parsec
 import Text.Parsec.Expr
 import Text.Parsec.Number
 import Data.List (foldl')
 import Data.Ix
 import Data.Bifunctor
+import Morte.Core
 
-parseCell :: Stream String m t => ParsecT String u m (CellValue a)
+parseCell :: Stream String m t => ParsecT String u m CellExpr
 parseCell = parseApps <* eof
 
-parseApps :: Stream String m t => ParsecT String u m (CellValue a)
+parseApps :: Stream String m t => ParsecT String u m CellExpr
 parseApps = between (string "(") (string ")") parseApps <|> (findApps =<< expr `sepBy1` string " ")
  where findApps [] = fail "cell expression"
        findApps [a] = pure a
        findApps (a:b:as) = pure $ foldl' App (App a b) as
 
-expr :: Stream String m t => ParsecT String u m (CellValue a)
+expr :: Stream String m t => ParsecT String u m CellExpr
 expr =
-  try (RawValue <$> rawValue) <|>
-  -- Deprecated syntax -- try cellRange <|>
+  try (Embed . RawValue <$> rawValue) <|>
   lambda <|>
   variable <|>
   ref <|>
   namedRef <|>
   between (string "(") (string ")") parseApps <?> "cell expression"
 
-rawValue :: Stream String m t => ParsecT String u m (CellRawValue a)
+rawValue :: Stream String m t => ParsecT String u m CellRawValue
 rawValue =
   try (FloatValue <$> fractional) <|>
   try (IntValue <$> int) <|>
   ((StringValue . T.pack) <$> between (string "\"") (string "\"") (many escapedString)) <|>
-  (ListValue <$> between (string "[") (string "]") (rawValue `sepBy` string ",")) <|>
+  (flip ListValue <$> between (string "[") (string ":") ((fmap Embed rawValue) `sepBy` string ",") <*> (typeValue <* string "]")) <|>
   (PosValue <$> (string "@" *> between (string "{") (string "}") ((,) <$> (fromIntegral <$> nat) <* string "," <*> (fromIntegral <$> nat)))) <|>
-  (TypeValue <$> (string "#" *> typeValue)) <?> "raw cell value"
+  (TypeValue <$> (string "#" *> typeValue)) <?> "a raw cell value"
 
 escapedString :: Stream String m t => ParsecT String u m Char
 escapedString = (noneOf "\\\"" <|> (char '\\' *> oneOf "\\\""))
 
 typeValue :: Stream String m t => ParsecT String u m CellType
 typeValue =
-  buildExpressionParser [[Prefix ((string "List ") *> pure ListType)], [Infix (try (string " -> ") *> pure FuncType) AssocRight], []] basicType <|>
-  basicType <|>
-  between (string "(") (string ")") typeValue <?> "A Type"
+  between (string "(") (string ")") (buildExpressionParser [[Infix (try (string " -> ") *> pure (Pi "")) AssocRight], [Infix (many1 (char ' ') *> pure App) AssocLeft]] ((Embed <$> basicType) <|>
+    ((Var . flip V 0  . T.pack) <$> ((:) <$> lower <*> many alphaNum))) <|>
+    (string "*" >> pure (Const Star))) <|>
+  (Embed <$> basicType) <|>
+  ((Var . flip V 0  . T.pack) <$> ((:) <$> lower <*> many alphaNum)) <|>
+  (string "*" >> pure (Const Star)) <|>
+  between (string "(") (string ")") typeValue <?> "a type"
 
-basicType :: Stream String m t => ParsecT String u m CellType
+basicType :: Stream String m t => ParsecT String u m RawType
 basicType = 
-  (string "Int"    *> pure    IntType) <|>
-  (string "Float"  *> pure  FloatType) <|>
-  (string "String" *> pure StringType) <|>
-  (string "Date"   *> pure   DateType) <|>
-  (string "Time"   *> pure   TimeType) <|>
-  (string "Pos"    *> pure    PosType) <|>
-  (string "Type"   *> pure   TypeType) <|>
-  ((VarType . T.pack) <$> ((:) <$> lower <*> many alphaNum)) <?> "basic type"
+  (string "Int"    *> pure    Int) <|>
+  (string "Float"  *> pure  Float) <|>
+  (string "String" *> pure String) <|>
+  (string "Date"   *> pure   Date) <|>
+  (string "Time"   *> pure   Time) <|>
+  (string "Pos"    *> pure    Pos) <|>
+  (string "List"   *> pure   List) <?> "basic type"
 
-variable :: Stream String m t => ParsecT String u m (CellValue a)
-variable = (VariableValue . T.pack) <$> ((:) <$> lower <*> many alphaNum) <?> "variable"
+variable :: Stream String m t => ParsecT String u m CellExpr
+variable = (Var . flip V 0 . T.pack) <$> ((:) <$> lower <*> many alphaNum) <?> "variable"
 
-namedRef :: Stream String m t => ParsecT String u m (CellValue a)
-namedRef = (NamedRefValue . T.pack) <$> ((:) <$> upper <*> many alphaNum) <?> "named reference"
+namedRef :: Stream String m t => ParsecT String u m CellExpr
+namedRef = (Embed . NamedRefValue . T.pack) <$> ((:) <$> upper <*> many alphaNum) <?> "named reference"
 
-ref :: Stream String m t => ParsecT String u m (CellValue a)
-ref = RefValue <$> (string "@!" *> between (string "{") (string "}") ((,) <$> (fromIntegral <$> nat) <* string "," <*> (fromIntegral <$> nat)))
+ref :: Stream String m t => ParsecT String u m CellExpr
+ref = (Embed . RefValue) <$> (string "@!" *> between (string "{") (string "}") ((,) <$> (fromIntegral <$> nat) <* string "," <*> (fromIntegral <$> nat)))
 
-lambda :: Stream String m t => ParsecT String u m (CellValue a)
-lambda = fmap RawValue $ FuncValue <$> fmap T.pack (string "\\" *> ((:) <$> lower <*> many alphaNum) <* string ":") <*> typeValue <* string " => " <*> expr
+lambda :: Stream String m t => ParsecT String u m CellExpr
+lambda = do
+  string "\\"
+  var <- fmap T.pack ((:) <$> lower <*> many alphaNum)
+  string ":"
+  t <- fmap ((Embed . RawValue . TypeValue . Embed) =<<) (try typeValue)
+  string " => "
+  e <- expr
+  pure $ Lam var t e
 
-{- Old syntax for ranges, deprecated
-cellRange :: Stream String m t => ParsecT String u m (CellValue a)
-cellRange = string "!" *> (Range <$> try (curry range <$> ((,) <$> (fromIntegral <$> nat) <* string "#" <*> (fromIntegral <$> nat)) <* string "!" <*> ((,) <$> (fromIntegral <$> nat) <* string "#" <*> (fromIntegral <$> nat)))) <?> "range"
--}

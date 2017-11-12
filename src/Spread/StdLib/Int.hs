@@ -2,23 +2,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Spread.StdLib.Int where
 import Spread.TypesAndVals
+import Morte.Core
 
-basicIntFns :: [(NamedReference, CellValue errortype)]
+basicIntFns :: [(NamedReference, CellRawExpr)]
 basicIntFns = [
-  ("Sum", RawValue (LiftHaskFun (ListType IntType) IntType (ShowWrap "Sum" (\ evalFn -> either
+  ("Sum", Embed (LiftHaskFun "" (App (Embed List) (Embed Int)) (Embed Int) (ShowWrap "Sum" (\ evalFn -> either
     (error "Sum: The Spread type system has failed us, it gave us something that does not type check!")
-    (RawValue . IntValue . sum . (\case
-      (ListType IntType, ListValue l) -> fmap (\ case
-        IntValue i -> i
+    (Embed . IntValue . sum . (\case
+      CellWithType _ (Embed (ListValue (Embed Int) l)) -> fmap (\ case
+        Embed (IntValue i) -> i
         x -> error ("Sum: The Spread type system has failed us! We wanted an Int, but it gave us " ++ show x)) l
       x -> error ("Sum: The Spread type system has failed us! We wanted a List, but it gave us " ++ show x))) . evalFn . Left)))),
-  ("Plus", RawValue (LiftHaskFun IntType (FuncType IntType IntType) (ShowWrap "Plus" (\ evalFn -> either
+  ("Plus", Embed (LiftHaskFun "" (Embed Int) (Pi "" (Embed Int) (Embed Int)) (ShowWrap "Plus" (\ evalFn -> either
     (error "Plus: The Spread type system has failed us, it gave us something that does not type check!")
     (\case
-        (IntType, IntValue i) -> RawValue $ LiftHaskFun IntType IntType (ShowWrap ("Plus " ++ show i) (\ evalFn -> either
+        CellWithType _ (Embed (IntValue i)) -> Embed $ LiftHaskFun "" (Embed Int) (Embed Int) (ShowWrap ("Plus " ++ show i) (\ evalFn -> either
           (error "Plus: The Spread type system has failed us, it gave us something that does not type check!")
-          (RawValue . IntValue . (\ case
-            (IntType, IntValue j) -> i + j
+          (Embed . IntValue . (\ case
+            CellWithType _ (Embed (IntValue j)) -> i + j
             x -> error ("Plus: The Spread type system has failed us! We wanted an Int, but it gave us " ++ show x))) . evalFn . Left))
         x -> error ("Plus: The Spread type system has failed us! We wanted an Int, but it gave us " ++ show x)) . evalFn . Left))))
   ]

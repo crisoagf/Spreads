@@ -17,8 +17,18 @@ cabal-version:       >=1.10
 
 executable Spreadsheets
   main-is:             Spread.hs
-  other-modules:       Spread.StdLib.Int, Spread.StdLib.Range, Spread.TypesAndVals, Spread.Typecheck, Spread.Parser
+  other-modules:       Spread.StdLib, Spread.StdLib.Int, Spread.StdLib.Range, Spread.TypesAndVals, Spread.Typecheck, Spread.Parser
   other-extensions:    TupleSections, OverloadedStrings, LambdaCase, FlexibleContexts
-  build-depends:       base >=4.10 && <4.11, array >=0.5 && <0.6, containers >=0.5 && <0.6, time >=1.8 && <1.9, text >=1.2 && <1.3, parsec >=3.1 && <3.2, parsec3-numbers, transformers, morte
+  build-depends:       base >=4.10 && <4.11, array >=0.5 && <0.6, containers >=0.5 && <0.6, time >=1.8 && <1.9, text >=1.2 && <1.3, parsec >=3.1 && <3.2, parsec3-numbers, transformers, morte, text-format
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options:         -dynamic -shared
+
+executable SpreadsheetsNCurses
+  main-is:             Spread/CLI/NCurses.hs
+  other-modules:       Spread.StdLib, Spread.StdLib.Int, Spread.StdLib.Range, Spread.TypesAndVals, Spread.Typecheck, Spread.Parser, Spread
+  other-extensions:    TupleSections, OverloadedStrings, LambdaCase, FlexibleContexts
+  build-depends:       base >=4.10 && <4.11, array >=0.5 && <0.6, containers >=0.5 && <0.6, time >=1.8 && <1.9, text >=1.2 && <1.3, parsec >=3.1 && <3.2, parsec3-numbers, transformers, morte, text-format, ncurses == 0.2.16
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -dynamic -shared
