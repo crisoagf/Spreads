@@ -21,11 +21,14 @@ import Control.Monad (join, forM, (>=>))
 data EvalContext = EvalContext { getEvalFn :: Either CellExpr CellIndex -> EvalM CellWithType, getNamedRefFn :: NamedReference -> Maybe CellRawExpr }
 data InferContext = InferContext { getInferFn :: Either CellExpr CellIndex -> InferM (Expr X), inferNamedRefFn :: NamedReference -> Maybe CellRawExpr }
 
-type EvalM  = ExceptT TypeError (Reader EvalContext)
-type InferM = ExceptT TypeError (Reader InferContext)
+type EvalM  = ExceptT CellError (Reader EvalContext)
+type InferM = ExceptT CellError (Reader InferContext)
 
 inferToEval :: InferM a -> EvalM a
 inferToEval = mapExceptT (withReader (\ ectx@(EvalContext evalFn nrs) -> InferContext (mapExceptT (pure . fmap toPi . (`runReader` ectx)) . fmap cellType . evalFn) nrs))
+
+runEval :: EvalM a -> EvalContext -> Either CellError a
+runEval = runReader . runExceptT
 
 typeAndEvaluate :: CellExpr -> EvalM CellWithType
 typeAndEvaluate = fmap (uncurry CellWithType) . runKleisli (Kleisli ((getType >=> uncurry returnTypes) >>> inferToEval) &&& Kleisli evaluate)
@@ -40,7 +43,7 @@ evaluate :: CellExpr -> EvalM CellRawExpr
 evaluate = runKleisli $ Kleisli rawify >>> arr normalize >>> Kleisli normalizeHaskFns >>> Kleisli (\ (continue, x) -> if continue then evaluate (fmap RawValue x) else pure x)
 
 liftMorte :: Either TypeError a -> InferM a
-liftMorte = either throwE pure
+liftMorte = either (throwE . TE) pure
 
 liftVals :: CellExpr -> InferM (Map (Either (OrdWrap CellType) Text) [(Int, CellValue)], Expr X)
 liftVals expr = (fmap join . uncurry (flip (,))) <$> (runStateT (traverse (\ x -> case x of
@@ -72,7 +75,7 @@ giveContext = M.foldrWithKey (\ ett l ctx -> case ett of
     x@(NamedRefValue name) -> do
       inferFn <- lift (asks getInferFn)
       namedRefs <- lift (asks inferNamedRefFn)
-      Ctx.insert (pretty x) <$> (maybe (throwE $ TypeError Ctx.empty (Var $ V ("(reference) " <> name) 0) UnboundVariable) (inferFn . Left . fmap RawValue) $ namedRefs name) <*> ctx') ctx l
+      Ctx.insert (pretty x) <$> (maybe (throwE $ RE $ NamedRefDoesNotExist name) (inferFn . Left . fmap RawValue) $ namedRefs name) <*> ctx') ctx l
     ) (pure basics)
 
 basics :: Context (Expr X)
@@ -117,7 +120,7 @@ rawify expr = join <$> traverse rawify' expr
 rawify' :: CellValue -> EvalM CellRawExpr
 rawify' (RawValue x) = pure (Embed x)
 rawify' (RefValue i) = join $ lift $ asks (fmap cellValue . ($ Right i) . getEvalFn)
-rawify' (NamedRefValue r) = maybe (throwE $ TypeError Ctx.empty (Var $ V ("(reference) " <> r) 0) UnboundVariable) pure =<< lift (asks (($ r) . getNamedRefFn))
+rawify' (NamedRefValue r) = maybe (throwE $ RE $ NamedRefDoesNotExist r) pure =<< lift (asks (($ r) . getNamedRefFn))
 --rawify' (Range t r) = (Embed . ListValue t) <$> join (lift $ asks (forM (fmap Right r) . getEvalFn))
 
 normalizeHaskFns :: CellRawExpr -> EvalM (Bool, CellRawExpr)

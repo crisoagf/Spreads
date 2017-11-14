@@ -11,14 +11,14 @@ import Data.Ix
 import Data.Bifunctor
 import Morte.Core
 
+exprFromText :: String -> Text -> Either CellError CellExpr
+exprFromText l t = bimap PE id $ parse parseCell l t
+
 parseCell :: Stream Text m t => ParsecT Text u m CellExpr
 parseCell = parseApps <* eof
 
 parseApps :: Stream Text m t => ParsecT Text u m CellExpr
-parseApps = between (string "(") (string ")") parseApps <|> (findApps =<< expr `sepBy1` string " ")
- where findApps [] = fail "cell expression"
-       findApps [a] = pure a
-       findApps (a:b:as) = pure $ foldl' App (App a b) as
+parseApps = buildExpressionParser [[Infix (many1 (char ' ') *> pure App) AssocLeft]] expr 
 
 expr :: Stream Text m t => ParsecT Text u m CellExpr
 expr =
@@ -31,7 +31,7 @@ expr =
 
 rawValue :: Stream Text m t => ParsecT Text u m CellRawValue
 rawValue =
-  try (FloatValue <$> fractional) <|>
+  try (FloatValue <$> (sign <*> floating)) <|>
   try (IntValue <$> int) <|>
   ((StringValue . T.pack) <$> between (string "\"") (string "\"") (many escapedText)) <|>
   (flip ListValue <$> between (string "[") (string ":") ((fmap Embed rawValue) `sepBy` string ",") <*> (typeValue <* string "]")) <|>

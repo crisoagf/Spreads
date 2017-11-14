@@ -10,6 +10,7 @@ import Data.Text.Buildable
 import Data.List
 import Data.Monoid
 import Morte.Core
+import Text.Parsec (ParseError)
 
 type TypeVariable = Text
 type Variable = Text
@@ -18,6 +19,13 @@ type CellIndex = (Natural, Natural)
 
 type CellExpr = Expr CellValue
 type CellRawExpr = Expr CellRawValue
+data CellError = PE ParseError | TE TypeError | RE RefError deriving Show
+
+data RefError =
+  NamedRefDoesNotExist NamedReference |
+  RefDoesNotExist CellIndex           |
+  ErrorInRef CellIndex CellError      |
+  Loop [CellIndex] deriving Show
 
 data CellRawValue =
   TypeValue CellType               |
@@ -29,7 +37,7 @@ data CellRawValue =
   PosValue CellIndex               |
   ListValue CellType [CellRawExpr] |
   LiftHaskFun TypeVariable CellType CellType (ShowWrap (
-    (Either CellExpr CellIndex -> Either TypeError CellWithType) -> 
+    (Either CellExpr CellIndex -> Either CellError CellWithType) -> 
     CellExpr -> CellRawExpr)) deriving Show
 
 data RawType = Int | Float | String | Date | Time | Pos | List deriving (Show, Eq, Ord)
@@ -69,6 +77,15 @@ data ShowWrap w = ShowWrap String w
 
 instance Show (ShowWrap w) where
   show (ShowWrap s _) = s
+
+instance (Buildable a, Buildable b) => Buildable (Either a b) where
+  build (Left a) = "Error: " <> build a
+  build (Right b) = build b
+
+instance Buildable CellError where
+  build (PE e) = fromString (show e)
+  build (TE e) = build e
+  build (RE e) = fromString (show e)
 
 data CellValue =
   RawValue CellRawValue        |

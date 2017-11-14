@@ -12,7 +12,7 @@ liftHaskFnType fname tname restype f = Embed $ LiftHaskFun tname (Const Star) re
       CellWithType (Const Star) (Embed (TypeValue t)) -> f t
       CellWithType t x -> error (unpack fname ++ ": The Spread type system has failed us! We wanted a Type, but it gave us a " ++ show t)) . evalFn . Left))
 
-liftHaskFnPos :: Text -> CellType -> ((Either CellExpr CellIndex -> Either TypeError CellWithType) -> CellIndex -> CellRawExpr) -> CellRawExpr
+liftHaskFnPos :: Text -> CellType -> ((Either CellExpr CellIndex -> Either CellError CellWithType) -> CellIndex -> CellRawExpr) -> CellRawExpr
 liftHaskFnPos fname restype f = Embed $ LiftHaskFun "" (Embed Pos) restype (ShowWrap (unpack fname) (\ evalFn x -> either
     (error (unpack fname ++ ": The Spread type system has failed us, by giving us " ++ show x ++ " that does not type check!"))
     (\case
