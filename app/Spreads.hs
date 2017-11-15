@@ -75,7 +75,7 @@ spreadsheetParse :: Array CellIndex (Either CellError Text) -> Array CellIndex (
 spreadsheetParse = fmap (exprFromText "input" =<<)
 
 spreadsheetInferTypes :: (NamedReference -> Maybe CellRawExpr) -> Array CellIndex (Either CellError CellExpr) -> Array CellIndex (Either CellError CellType)
-spreadsheetInferTypes refMap arr = fmap (join . fmap ((`runReader` (InferContext (either (fmap snd . getType) (ExceptT . pure . fmap snd . (go !))) refMap)) . runExceptT . uncurry returnTypes)) $ go where go = fmap (((`runReader` (InferContext (either (fmap snd . getType) (ExceptT . pure . fmap snd . (go !))) refMap)) . runExceptT . getType) =<<) arr
+spreadsheetInferTypes refMap arr = go where go = fmap (((`runReader` (InferContext (either getType (ExceptT . pure . (go !))) refMap)) . runExceptT . getType) =<<) arr
 
 spreadsheetEval :: (NamedReference -> Maybe CellRawExpr) -> Array CellIndex (Either CellError CellExpr) -> Array CellIndex (Either CellError CellWithType)
 spreadsheetEval refMap arr = go where go = fmap (((`runReader` (EvalContext (either typeAndEvaluate (ExceptT . pure . (go !))) refMap)) . runExceptT . typeAndEvaluate) =<<) arr
