@@ -6,8 +6,9 @@ import Spread.TypesAndVals
 import Morte.Core
 import qualified Data.Text.Lazy as T
 import qualified Test.Tasty.SmallCheck as SC
+import Data.Monoid ((<>))
 
-parserTests = testGroup "Parser tests" [intParse, floatParse, stringParse, sIsParsed, kIsParsed]
+parserTests = testGroup "Parser tests" [intParse, floatParse, stringParse, sIsParsed, kIsParsed, parenthesesAndSpacePlayWell]
 
 intParse = SC.testProperty "Parsing an int gives back the same int" $ \ a -> case exprFromText "" (T.pack $ show a) of
   Right (Embed (RawValue (IntValue b))) -> a == b
@@ -32,5 +33,9 @@ sIsParsed = SC.testProperty "Parse a well known combinator (1/2)" $ case es of
 
 kIsParsed = SC.testProperty "Parse a well known combinator (2/2)" $ case ek of
   Right _ -> True
+  _ -> False
+
+parenthesesAndSpacePlayWell = SC.testProperty "An expression with parentheses and spaces is correctly parsed (Regression test)" $ \i -> case exprFromText "" ("(\\b:Int => b) " <> (T.pack $ show i)) of
+  Right (App (Lam "b" (Embed (RawValue (TypeValue (Embed Int)))) (Var (V "b" 0))) (Embed (RawValue (IntValue j)))) -> i == j
   _ -> False
 

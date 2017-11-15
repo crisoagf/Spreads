@@ -17,15 +17,17 @@ import Control.Arrow
 import Morte.Core
 import qualified Morte.Context as Ctx
 import Control.Monad (join, forM, (>=>))
+import Data.Set (Set)
+import qualified Data.Set as S
 
 data EvalContext = EvalContext { getEvalFn :: Either CellExpr CellIndex -> EvalM CellWithType, getNamedRefFn :: NamedReference -> Maybe CellRawExpr }
-data InferContext = InferContext { getInferFn :: Either CellExpr CellIndex -> InferM (Expr X), inferNamedRefFn :: NamedReference -> Maybe CellRawExpr }
+data InferContext = InferContext { getInferFn :: Either CellExpr CellIndex -> InferM' (Expr X), inferNamedRefFn :: NamedReference -> Maybe CellRawExpr }
 
-type EvalM  = ExceptT CellError (Reader EvalContext)
-type InferM = ExceptT CellError (Reader InferContext)
+type EvalM  = ExceptT CellError (StateT [CellIndex] (Reader EvalContext ))
+type InferM = ExceptT CellError (StateT [CellIndex] (Reader InferContext))
 
 inferToEval :: InferM a -> EvalM a
-inferToEval = mapExceptT (withReader (\ ectx@(EvalContext evalFn nrs) -> InferContext (mapExceptT (pure . fmap toPi . (`runReader` ectx)) . fmap cellType . evalFn) nrs))
+inferToEval = mapExceptT (mapStateT $ withReader (\ ectx@(EvalContext evalFn nrs) -> InferContext (mapExceptT (pure . fmap toPi . (`runReader` ectx)) . fmap cellType . evalFn) nrs))
 
 runEval :: EvalM a -> EvalContext -> Either CellError a
 runEval = runReader . runExceptT
@@ -33,20 +35,23 @@ runEval = runReader . runExceptT
 typeAndEvaluate :: CellExpr -> EvalM CellWithType
 typeAndEvaluate = fmap (uncurry CellWithType) . runKleisli (Kleisli ((getType >=> uncurry returnTypes) >>> inferToEval) &&& Kleisli evaluate)
 
-getType :: CellExpr -> InferM (Map (Either (OrdWrap CellType) Text) [(Int, CellValue)], Expr X)
-getType expr = do
-  (exprMap, lifted) <- liftVals expr
+getTypeWithVisited :: CellExpr -> InferM (Map (Either (OrdWrap CellType) Text) [(Int, CellValue)], Expr X)
+getTypeWithVisited visits expr = do
+  (exprMap, lifted) <- liftVals visits expr
   ctx <- giveContext exprMap
   (exprMap,) <$> liftMorte (typeWith ctx lifted)
+
+getType :: CellExpr -> InferM (Map (Either (OrdWrap CellType) Text) [(Int, CellValue)], Expr X)
+getType = getTypeWithVisited
 
 evaluate :: CellExpr -> EvalM CellRawExpr
 evaluate = runKleisli $ Kleisli rawify >>> arr normalize >>> Kleisli normalizeHaskFns >>> Kleisli (\ (continue, x) -> if continue then evaluate (fmap RawValue x) else pure x)
 
 liftMorte :: Either TypeError a -> InferM a
-liftMorte = either (throwE . TE) pure
+liftMorte = either (throwE . TE) (StateT . pure)
 
 liftVals :: CellExpr -> InferM (Map (Either (OrdWrap CellType) Text) [(Int, CellValue)], Expr X)
-liftVals expr = (fmap join . uncurry (flip (,))) <$> (runStateT (traverse (\ x -> case x of
+liftVals visits expr = (fmap join . uncurry (flip (,))) <$> (runStateT (traverse (\ x -> case x of
   RawValue (TypeValue   t) -> pure (toPi t)
   RawValue (IntValue    _) -> addToMap x (Embed $ Int)
   RawValue (FloatValue  _) -> addToMap x (Embed $ Float)
@@ -56,7 +61,11 @@ liftVals expr = (fmap join . uncurry (flip (,))) <$> (runStateT (traverse (\ x -
   RawValue (PosValue    _) -> addToMap x (Embed $ Pos)
   RawValue (ListValue   t _) -> addToMap x (App (Embed List) t)
   RawValue (LiftHaskFun tv t1 t2 _) -> addToMap x (Pi tv t1 t2)
-  RefValue (i,j) -> modify (M.insert (Right $ pretty x) [(0, x)]) >> pure (Var (V (pretty x) 0))
+  RefValue ci -> do
+    inVisits <- lift (gets (elem ci))
+    lift $ modify (ci:)
+    when inVisits (throwE . RE . Loop =<< lift get)
+
   NamedRefValue name -> modify (M.insert (Right $ pretty x) [(0, x)]) >> pure (Var (V (pretty x) 0))
   ) expr) M.empty)
   where addToMap :: CellValue -> CellType -> StateT (Map (Either (OrdWrap CellType) Text) [(Int, CellValue)]) InferM (Expr X)

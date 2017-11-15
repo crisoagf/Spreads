@@ -45,9 +45,10 @@ import Graphics.Vty.Input.Events
 import Morte.Core hiding (App)
 import qualified Morte.Core as M
 
-data Vision = Input | Type | Value | Presentation
-data Mode = Normal | Edit
-data EditorState = EditorState { _currentSheet :: Array CellIndex Text, _currentCell :: CellIndex, {-_selColor :: ColorID, _norColor :: ColorID,-}  _windowHeight :: Integer, _windowWidth :: Integer, _cellConfig :: CellConfig, _currentVision :: Vision, _currentMode :: Mode, _commandBar :: Editor T'.Text () }
+data Vision   = Input | Type | Value | Presentation
+data Mode     = Normal | Edit
+data ShowMode = ShowInput | ShowCurrent
+data EditorState = EditorState { _currentSheet :: Array CellIndex Text, _currentCell :: CellIndex, _windowHeight :: Integer, _windowWidth :: Integer, _cellConfig :: CellConfig, _currentVision :: Vision, _currentMode :: Mode, _showMode :: ShowMode, _commandBar :: Editor T'.Text () }
 data CellConfig = CellConfig { _cellHeight :: Integer, _cellWidth :: Integer, _numVisRows :: Integer, _numVisCols :: Integer} deriving Eq
 
 data EditorEventSpec a = 
@@ -57,6 +58,7 @@ data EditorEventSpec a =
   ChangeModeTo Mode a |
   ChangeVisionTo Vision a |
   UpdateCellWithEditor a | 
+  FlipShowMode a |
   PrintCell a deriving Functor
 
 type EditorEvent = Free EditorEventSpec ()
@@ -99,7 +101,7 @@ stdLib = flip lookup (basicIntFns ++ basicRangeFns)
 defaultCellConfig = CellConfig 1 27 0 0 -- (min h ((1+) $ fromIntegral $ uncurry (flip (-) `on` fst) $ bounds exampleSheet)) (fromIntegral $ min 15 ((1+) $ uncurry (flip (-) `on` snd) $ bounds exampleSheet))
 
 main :: IO ()
-main = void $ defaultMain mainApp $ EditorState exampleSheet (0,0) 0 0 defaultCellConfig Input Normal (teditor (visualize Input exampleSheet ! (0,0)))
+main = void $ defaultMain mainApp $ EditorState exampleSheet (0,0) 0 0 defaultCellConfig Value Normal ShowCurrent (teditor (visualize Input exampleSheet ! (0,0)))
 
 mainApp :: App EditorState EditorEvent ()
 mainApp = App drawUi cursorChoose eventHandler startHook setAttrs
@@ -123,7 +125,8 @@ eventHandler edState ev = case _currentMode edState of
     VtyEvent (EvKey KRight [])      -> liftF (MovePointer R ())
     VtyEvent (EvKey KUp    [])      -> liftF (MovePointer U ())
     VtyEvent (EvKey KDown  [])      -> liftF (MovePointer D ())
-    VtyEvent (EvKey (KChar 'e') []) -> liftF (ChangeModeTo    Edit ())
+    VtyEvent (EvKey (KChar 's') []) -> liftF (FlipShowMode   ())
+    VtyEvent (EvKey (KChar 'e') []) -> liftF (ChangeModeTo   Edit ())
     VtyEvent (EvKey (KChar 'v') []) -> liftF (ChangeVisionTo Value ())
     VtyEvent (EvKey (KChar 'i') []) -> liftF (ChangeVisionTo Input ())
     VtyEvent (EvKey (KChar 't') []) -> liftF (ChangeVisionTo Type  ())
@@ -147,10 +150,15 @@ editorEventInterpreter (Free f) = case f of
   ChangeModeTo   m next -> editorEventInterpreter next . updateEditorText . (currentMode .~ m)
   UpdateCellWithEditor next -> editorEventInterpreter next . (joinLenses (joinLenses currentCell (commandBar . editContentsL)) currentSheet %~ (\((ci, txt), sh) -> ((ci,txt), sh // [(ci, T.fromStrict $ mconcat $ getText txt)])))
   PrintCell next -> editorEventInterpreter next . (joinLenses (joinLenses currentCell (commandBar . editContentsL)) currentSheet %~ (\((ci, txt), sh) -> ((ci,txt), sh // [(ci, T.fromStrict $ mconcat $ getText txt)])))
+  FlipShowMode next -> editorEventInterpreter next . updateEditorText . (showMode %~ \case
+    ShowCurrent -> ShowInput
+    ShowInput -> ShowCurrent)
   Exit -> halt
 
 updateEditorText :: EditorState -> EditorState 
-updateEditorText edState = edState { _commandBar = applyEdit (const $ textZipper [T.toStrict $ visualize (_currentVision edState) (_currentSheet edState) ! (_currentCell edState)] (Just 1)) $ _commandBar edState}
+updateEditorText edState = case _showMode edState of
+  ShowCurrent -> edState { _commandBar = applyEdit (const $ textZipper [T.toStrict $ visualize (_currentVision edState) (_currentSheet edState) ! (_currentCell edState)] (Just 1)) $ _commandBar edState}
+  ShowInput -> edState { _commandBar = applyEdit (const $ textZipper [T.toStrict $ _currentSheet edState ! _currentCell edState] (Just 1)) $ _commandBar edState}
 
 updateEditorForEdit :: EditorState -> EditorState 
 updateEditorForEdit edState = edState { _commandBar = applyEdit (const $ textZipper [T.toStrict $ _currentSheet edState ! _currentCell edState] (Just 1)) $ _commandBar edState}
@@ -175,78 +183,5 @@ drawCell pos cellInd (CellConfig _ cw _ _) t = withAttr (if pos == cellInd then 
 visualize :: Vision -> Array CellIndex Text -> Array CellIndex Text
 visualize Input = fmap pretty . spreadsheetParse . fmap Right
 visualize Type = fmap pretty . spreadsheetInferTypes stdLib . spreadsheetParse . fmap Right
-visualize Value = fmap pretty . spreadsheetEval stdLib . spreadsheetParse . fmap Right
+visualize Value = fmap (pretty . fmap cellValue) . spreadsheetEval stdLib . spreadsheetParse . fmap Right
 
---do
---  runCurses $ do
---    win <- defaultWindow
---    (h, w) <- updateWindow win windowSize
---    normalColor <- newColorID ColorWhite ColorDefault 1
---    selectedColor <- newColorID ColorBlack ColorWhite 2
---    let 
---    let defaultEdState = 
---    setEditorState win defaultEdState 
---    fix (\ loop edState -> do
---      ev <- getEvent win Nothing
---      let (newEdState', exit) = modeInterpreter edState (_currentMode edState) ev
---      when (not exit) $ do
---        when (view cellConfig edState /= view cellConfig newEdState') (updateWindow win clear)
---        let newEdState = newEdState' { _statusBar = (uncurry (!) (newEdState' ^. joinLenses currentSheet currentCell))}
---        setEditorState win newEdState
---        loop newEdState) defaultEdState
-
---setEditorState :: Window -> EditorState -> Curses ()
---setEditorState win edState = updateWindow win (showSheet edState >> updateStatusBar edState) >> render
---
---modeInterpreter :: EditorState -> Mode -> Maybe Event -> (EditorState, Bool)
---modeInterpreter edState Normal ev =
---  let w = _windowWidth edState in case ev of
---        Just (EventCharacter 'q') -> (edState, True)
---        Just (EventCharacter 'i') -> (edState & currentVision .~ Input, False)
---        Just (EventCharacter 't') -> (edState & currentVision .~ Type , False)
---        Just (EventCharacter 'v') -> (edState & currentVision .~ Value, False)
---        Just (EventCharacter '+') -> (edState & joinLenses (cellConfig . numVisCols) (cellConfig . cellWidth) %~ (\ (visCols, cw) -> (visCols, min (w `div` visCols) (cw + 1))), False)
---        Just (EventCharacter '-') -> (edState & (cellConfig . cellWidth) %~ (\ cw -> max 1 (cw - 1)), False)
---        Just (EventSpecialKey KeyLeftArrow)  -> (edState & joinLenses currentSheet currentCell %~ (\ (exampleSheet, (r,c)) -> (exampleSheet, (r, max c (snd (fst $ bounds exampleSheet) + 1) - 1))), False)
---        Just (EventSpecialKey KeyRightArrow) -> (edState & joinLenses currentSheet currentCell %~ (\ (exampleSheet, (r,c)) -> (exampleSheet, (r, min c (snd (snd $ bounds exampleSheet) - 1) + 1))), False)
---        Just (EventSpecialKey KeyUpArrow)    -> (edState & joinLenses currentSheet currentCell %~ (\ (exampleSheet, (r,c)) -> (exampleSheet, (max r (fst (fst $ bounds exampleSheet) + 1) - 1, c))), False)
---        Just (EventSpecialKey KeyDownArrow)  -> (edState & joinLenses currentSheet currentCell %~ (\ (exampleSheet, (r,c)) -> (exampleSheet, (min r (fst (snd $ bounds exampleSheet) - 1) + 1, c))), False)
---        _ -> (edState, False)
---
---showSheet :: EditorState -> Update ()
---showSheet edState =
---  let s      = _currentSheet edState
---      selInd = _currentCell edState
---      sel    = _selColor edState
---      nor    = _norColor edState
---      h      = _windowHeight edState
---      w      = _windowWidth edState
---      ch     = min (_cellHeight (_cellConfig edState)) (h `div` _numVisRows (_cellConfig edState))
---      cw     = min (_cellWidth  (_cellConfig edState)) ((w - 1) `div` _numVisCols (_cellConfig edState)) in case _currentVision edState of
---        Input -> forM_ (assocs $ fmap (parse parseCell "input") s) (showCell ch cw selInd nor sel)
---        Type -> case sequence (spreadsheetParse s) of
---          Left pe -> moveCursor h 0 >> drawText "Please solve all parsing errors before typing"
---          Right sheet -> forM_ (assocs $ spreadsheetInferTypes stdLib sheet) (showCell ch cw selInd nor sel)
---        Value -> case sequence (spreadsheetParse s) of
---          Left pe -> moveCursor h 0 >> drawText "Please solve all parsing errors before evaluating"
---          Right sheet -> forM_ (assocs $ fmap (fmap cellValue) $ spreadsheetEval stdLib sheet) (showCell ch cw selInd nor sel)
---
---showCell :: (Show e, Buildable s) => Integer -> Integer -> CellIndex -> ColorID -> ColorID -> (CellIndex, Either e s) -> Update ()
---showCell ch cw (sx, sy) nor sel ((i,j), t) = do
---  moveCursor (fromIntegral i * ch) (fromIntegral j * cw)
---  drawString (replicate (fromIntegral $ cw - 1) ' ')
---  moveCursor (fromIntegral i * ch) (fromIntegral j * cw)
---  when (sx == i && sy == j) $ setColor sel
---  let t' = padAndTruncate (cw - 1) $ either (T.pack . show) pretty t
---  drawText (T.toStrict t')
---  when (sx == i && sy == j) $ setColor nor
---
---updateStatusBar :: EditorState -> Update ()
---updateStatusBar edState = do
---  moveCursor (_windowHeight edState - 1) 0
---  clearLine
---  drawText (T.toStrict $ _statusBar edState)
---
---padAndTruncate :: Integral i => i -> Text -> Text
---padAndTruncate i t = if T.length t <= fromIntegral i then t <> T.replicate (fromIntegral i - T.length t) " " else T.take (fromIntegral i - 3) t <> "..."
---
