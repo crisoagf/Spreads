@@ -35,8 +35,8 @@ skkIsIdInt = SC.testProperty "Known fact: S K K is the identity! (for ints)" $ \
           case eskk of
             Left _ -> False
             Right skk -> 
-              case runEval (evaluate $ App (App (App skk (Embed $ RawValue $ TypeValue $ Embed Int)
-                ) (Embed $ RawValue $ TypeValue $ Embed Int)
+              case runSome (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ Int)
+                ) (Embed $ RawValue $ TypeValue $ Int)
               ) (Embed $ RawValue $ IntValue i)) (EvalContext undefined undefined) of
                 Right (Embed (IntValue j)) -> i == j
 
@@ -44,8 +44,8 @@ skkIsIdFloat = SC.testProperty "Known fact: S K K is the identity! (for floats)"
           case eskk of
             Left _ -> False
             Right skk -> 
-              case runEval (evaluate $ App (App (App skk (Embed $ RawValue $ TypeValue $ Embed Float)
-                ) (Embed $ RawValue $ TypeValue $ Embed Int)
+              case runSome (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ Float)
+                ) (Embed $ RawValue $ TypeValue $ Int)
               ) (Embed $ RawValue $ FloatValue i)) (EvalContext undefined undefined) of
                 Right (Embed (FloatValue j)) -> i == j
 
@@ -53,8 +53,8 @@ skkIsIdString = SC.testProperty "Known fact: S K K is the identity! (for strings
           case eskk of
             Left _ -> False
             Right skk -> 
-              case runEval (evaluate $ App (App (App skk (Embed $ RawValue $ TypeValue $ Embed String)
-                ) (Embed $ RawValue $ TypeValue $ Embed Int)
+              case runSome (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ String)
+                ) (Embed $ RawValue $ TypeValue $ Int)
               ) (Embed $ RawValue $ StringValue $ T.pack i)) (EvalContext undefined undefined) of
                 Right (Embed (StringValue j)) -> T.pack i == j
 

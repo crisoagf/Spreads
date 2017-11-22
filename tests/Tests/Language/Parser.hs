@@ -22,8 +22,8 @@ stringParse = SC.testProperty "Parsing a string gives back the same string" $ \ 
   Right (Embed (RawValue (StringValue b))) -> T.pack a == b
   _ -> False
 
-s' = "\\a:* => \\b:* => \\c:* => \\x:(a -> b -> c) => \\y:(a -> b) => \\z:a => (x z (y z))"
-k' = "\\a:* => \\b:* => \\x:a => \\y:b => x"
+s' = "\\a:* -> \\b:* -> \\c:* -> \\x:(Π_:a -> Π_:b -> c) -> \\y:(Π_:a -> b) -> \\z:a -> (x z (y z))"
+k' = "\\a:* -> \\b:* -> \\x:a -> \\y:b -> x"
 es = exprFromText "" s'
 ek = exprFromText "" k'
 
@@ -35,7 +35,7 @@ kIsParsed = SC.testProperty "Parse a well known combinator (2/2)" $ case ek of
   Right _ -> True
   _ -> False
 
-parenthesesAndSpacePlayWell = SC.testProperty "An expression with parentheses and spaces is correctly parsed (Regression test)" $ \i -> case exprFromText "" ("(\\b:Int => b) " <> (T.pack $ show i)) of
-  Right (App (Lam "b" (Embed (RawValue (TypeValue (Embed Int)))) (Var (V "b" 0))) (Embed (RawValue (IntValue j)))) -> i == j
+parenthesesAndSpacePlayWell = SC.testProperty "An expression with parentheses and spaces is correctly parsed (Regression test)" $ \i -> case exprFromText "" ("(\\b:#Int -> b) " <> (T.pack $ show i)) of
+  Right (App (Lam "b" (Embed (RawValue (TypeValue Int))) (Var (V "b" 0))) (Embed (RawValue (IntValue j)))) -> i == j
   _ -> False
 

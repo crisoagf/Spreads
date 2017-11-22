@@ -1,25 +1,18 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Spread.StdLib.Int where
+import Spread.StdLib
 import Spread.TypesAndVals
 import Morte.Core
+import Data.Monoid
+import Data.Text.Buildable
 
-basicIntFns :: [(NamedReference, CellRawExpr)]
+plus :: (Buildable i, Show i) => CellRawExpr i
+plus = liftHaskFnInt "Plus" (Pi "" (Embed $ TypeValue Int) (Embed $ TypeValue Int)) (\ _ i -> Right $
+         liftHaskFnInt ("Plus " <> pretty i) (Embed $ TypeValue Int) (\ _ j -> Right $ Embed $ IntValue $ i + j))
+
+basicIntFns :: (Buildable i, Show i) => [(NamedReference, CellRawExpr i)]
 basicIntFns = [
-  ("Sum", Embed (LiftHaskFun "" (App (Embed List) (Embed Int)) (Embed Int) (ShowWrap "Sum" (\ evalFn -> either
-    (error "Sum: The Spread type system has failed us, it gave us something that does not type check!")
-    (Embed . IntValue . sum . (\case
-      CellWithType _ (Embed (ListValue (Embed Int) l)) -> fmap (\ case
-        Embed (IntValue i) -> i
-        x -> error ("Sum: The Spread type system has failed us! We wanted an Int, but it gave us " ++ show x)) l
-      x -> error ("Sum: The Spread type system has failed us! We wanted a List, but it gave us " ++ show x))) . evalFn . Left)))),
-  ("Plus", Embed (LiftHaskFun "" (Embed Int) (Pi "" (Embed Int) (Embed Int)) (ShowWrap "Plus" (\ evalFn -> either
-    (error "Plus: The Spread type system has failed us, it gave us something that does not type check!")
-    (\case
-        CellWithType _ (Embed (IntValue i)) -> Embed $ LiftHaskFun "" (Embed Int) (Embed Int) (ShowWrap ("Plus " ++ show i) (\ evalFn -> either
-          (error "Plus: The Spread type system has failed us, it gave us something that does not type check!")
-          (Embed . IntValue . (\ case
-            CellWithType _ (Embed (IntValue j)) -> i + j
-            x -> error ("Plus: The Spread type system has failed us! We wanted an Int, but it gave us " ++ show x))) . evalFn . Left))
-        x -> error ("Plus: The Spread type system has failed us! We wanted an Int, but it gave us " ++ show x)) . evalFn . Left))))
+  ("Sum", Lam "x" (listTypeOf (Embed $ TypeValue Int)) (App (App (App (Var (V "x" 0)) (Embed (TypeValue Int))) plus) (Embed (IntValue 0)))),
+  ("Plus", plus)
   ]

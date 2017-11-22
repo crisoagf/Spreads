@@ -4,17 +4,19 @@ import Spread.StdLib
 import Spread.TypesAndVals
 import Morte.Core
 import Data.Text.Lazy
-import Data.Maybe
 import Data.Ix
-import Data.Text.Buildable
 import Data.Monoid
+import Data.Text.Buildable
 
-basicRangeFns :: [(NamedReference, CellRawExpr)]
+basicRangeFns :: (Eq i, Buildable i, Show i, Ix i) => [(NamedReference, CellRawExpr i)]
 basicRangeFns = [
-  ("Range", liftHaskFnType "Range" "a" (Pi "" (Embed Pos) (Pi "" (Embed Pos) (App (Embed List) (Var $ V "a" 0)))) $
-    \t -> liftHaskFnPos ("Range " <> pretty t) (Pi "" (Embed Pos) (App (Embed List) t)) $
-      \ _ i -> liftHaskFnPos ("Range " <> pretty t <> " " <> (pack $ show i)) (App (Embed List) t) $
-        \ evalFn j -> Embed (ListValue t (either (error "Range i j: The Spread type system has failed us, it gave us something that does not type check!") (mapMaybe (\ (CellWithType t' v) -> if t' == t then Just v else Nothing)) $ mapM (evalFn . Right) (range (i,j))))) --,
+  ("Range", liftHaskFnType "Range" "a" (Pi "" (Embed (TypeValue Pos)) (Pi "" (Embed (TypeValue Pos)) (listTypeOf (Var $ V "a" 0)))) $
+    \t -> Right $ liftHaskFnPos ("Range " <> pretty t) (Pi "" (Embed $ TypeValue Pos) (listTypeOf t)) $
+      \ _ i -> Right $ liftHaskFnPos ("Range " <> pretty t <> " " <> (pack $ show i)) (listTypeOf t) $
+        \ evalFn j -> listValueOf t <$> mapM (uncurry (\ refInd -> either
+          (Left . RE . ErrorInRef refInd) 
+          (\ (CellWithType cellType' cellVal) ->
+            let cellTyp = fmap TypeValue cellType' in
+              if cellTyp == t then pure cellVal else Left (RE $ WrongTypeInRef t cellTyp))) . ((,) <$> id <*> evalFn . Left . Embed . RefValue)) (range (i,j)))] --,
   --("RangeInt", App (Embed (NamedRefValue "Range")) (Embed (RawValue $ TypeValue (Embed Int))))
-  ]
 
