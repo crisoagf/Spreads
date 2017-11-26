@@ -108,7 +108,7 @@ variable :: Ord e => ParsecT e Text m (Expr i)
 variable = (Var . flip V 0) <$> var <?> "variable"
 
 var :: Ord e => ParsecT e Text m Text
-var = T.pack <$> (((:) <$> lowerChar <*> many alphaNumChar) <* sc)
+var = T.pack <$> ((((:) <$> lowerChar <*> many alphaNumChar)) <* sc) <|> symbol "_"
 
 namedRef :: Ord e => ParsecT e Text m (CellValue i)
 namedRef = (NamedRefValue . T.pack) <$> ((:) <$> upperChar <*> many alphaNumChar <* sc) <?> "named reference"

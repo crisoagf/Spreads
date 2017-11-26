@@ -35,26 +35,26 @@ skkIsIdInt = SC.testProperty "Known fact: S K K is the identity! (for ints)" $ \
           case eskk of
             Left _ -> False
             Right skk -> 
-              case runSome (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ Int)
+              case runSome (EvalContext undefined undefined) (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ Int)
                 ) (Embed $ RawValue $ TypeValue $ Int)
-              ) (Embed $ RawValue $ IntValue i)) (EvalContext undefined undefined) of
+              ) (Embed $ RawValue $ IntValue i)) of
                 Right (Embed (IntValue j)) -> i == j
 
 skkIsIdFloat = SC.testProperty "Known fact: S K K is the identity! (for floats)" $ \ i ->
           case eskk of
             Left _ -> False
             Right skk -> 
-              case runSome (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ Float)
+              case runSome (EvalContext undefined undefined) (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ Float)
                 ) (Embed $ RawValue $ TypeValue $ Int)
-              ) (Embed $ RawValue $ FloatValue i)) (EvalContext undefined undefined) of
+              ) (Embed $ RawValue $ FloatValue i)) of
                 Right (Embed (FloatValue j)) -> i == j
 
 skkIsIdString = SC.testProperty "Known fact: S K K is the identity! (for strings)" $ \ i ->
           case eskk of
             Left _ -> False
             Right skk -> 
-              case runSome (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ String)
+              case runSome (EvalContext undefined undefined) (evaluate (CellIndex (0,0)) $ App (App (App skk (Embed $ RawValue $ TypeValue $ String)
                 ) (Embed $ RawValue $ TypeValue $ Int)
-              ) (Embed $ RawValue $ StringValue $ T.pack i)) (EvalContext undefined undefined) of
+              ) (Embed $ RawValue $ StringValue $ T.pack i)) of
                 Right (Embed (StringValue j)) -> T.pack i == j
 

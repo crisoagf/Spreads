@@ -8,8 +8,8 @@ import Data.Monoid
 import Data.Text.Buildable
 
 plus :: (Buildable i, Show i) => CellRawExpr i
-plus = liftHaskFnInt "Plus" (Pi "" (Embed $ TypeValue Int) (Embed $ TypeValue Int)) (\ _ i -> Right $
-         liftHaskFnInt ("Plus " <> pretty i) (Embed $ TypeValue Int) (\ _ j -> Right $ Embed $ IntValue $ i + j))
+plus = liftHaskFnInt "Plus" (Pi "" (Embed $ TypeValue Int) (Embed $ TypeValue Int)) (\ i -> fmap RawValue $
+         liftHaskFnInt ("Plus " <> pretty i) (Embed $ TypeValue Int) (\ j -> Embed $ RawValue $ IntValue $ i + j))
 
 basicIntFns :: (Buildable i, Show i) => [(NamedReference, CellRawExpr i)]
 basicIntFns = [

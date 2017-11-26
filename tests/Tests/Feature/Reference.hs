@@ -21,19 +21,19 @@ selfRefSheet, circularSheet, goToCircularSheet, oobTestSheet :: Array CellIndex 
 selfRefSheet = listArray ((CellIndex (0,0)),(CellIndex (0,0))) ["@!{0,0}"]
 
 selfRef = localOption (mkTimeout 1000000) $ SC.testProperty "Self references do not loop forever, and error out" $ case spreadsheetEval (const Nothing) (spreadsheetParse selfRefSheet) ! (CellIndex (0,0)) of
-  Left (RE (Loop [(CellIndex (0,0)),(CellIndex (0,0))])) -> True
+  Left (RE (Loop [CellIndex (0,0),CellIndex (0,0),CellIndex (0,0)])) -> True
   _ -> False
 
 circularSheet = listArray ((CellIndex (0,0)),(CellIndex (0,1))) ["@!{0,1}","@!{0,0}"]
 
 circular = localOption (mkTimeout 1000000) $ SC.testProperty "Self references do not loop forever, and error out" $ case spreadsheetEval (const Nothing) (spreadsheetParse circularSheet) ! (CellIndex (0,0)) of
-  Left (RE (ErrorInRef (CellIndex (0,1)) (RE (Loop [(CellIndex (0,1)),(CellIndex (0,0)),(CellIndex (0,1))])))) -> True
+  Left (RE (Loop [(CellIndex (0,0)),(CellIndex (0,1)),(CellIndex (0,0))])) -> True
   _ -> False
 
 goToCircularSheet = listArray ((CellIndex (0,0)),(CellIndex (0,3))) ["@!{0,1}","@!{0,2}","@!{0,3}","@!{0,2}"]
 
 goToCircular = localOption (mkTimeout 1000000) $ SC.testProperty "Self references do not loop forever, and error out" $ case spreadsheetEval (const Nothing) (spreadsheetParse goToCircularSheet) ! (CellIndex (0,0)) of
-  Left (RE (ErrorInRef (CellIndex (0,1)) (RE (ErrorInRef (CellIndex (0,2)) (RE (ErrorInRef (CellIndex (0,3)) (RE (Loop [(CellIndex (0,3)),(CellIndex (0,2)),(CellIndex (0,3))])))))))) -> True
+  Left (RE (ErrorInRef (CellIndex (0,1)) (RE (ErrorInRef (CellIndex (0,2)) (RE (Loop [(CellIndex (0,2)),(CellIndex (0,3)),(CellIndex (0,2))])))))) -> True
   _ -> False
 
 outOfBoundsTests = testGroup "Out of bounds tests" [tooMuchFst, tooMuchSnd, negativeFst, negativeSnd]

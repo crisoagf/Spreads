@@ -24,15 +24,15 @@ newtype CellIndex = CellIndex { getCellIndex :: (Natural, Natural) } deriving (E
 
 type CellExpr i = Expr (CellValue i)
 type CellRawExpr i = Expr (CellRawValue i)
-data CellError i = PE (ParseError Char X) | TE TypeError | RE (RefError i) deriving Show
+data CellError i = PE (ParseError Char X) | TE TypeError | RE (RefError i) deriving (Show)
 
 data RefError i =
-  Empty                                          |
-  NamedRefDoesNotExist NamedReference            |
-  RefDoesNotExist i                              |
-  ErrorInRef i (CellError i)                     |
+  Empty                                                              |
+  NamedRefDoesNotExist NamedReference                                |
+  RefDoesNotExist i                                                  |
+  ErrorInRef i (CellError i)                                         |
   WrongTypeInRef (CellRawExpr i) (CellRawExpr i) |
-  Loop [i] deriving Show
+  Loop [i] deriving (Show)
 
 data CellRawValue i =
   TypeValue RawType             |
@@ -43,9 +43,7 @@ data CellRawValue i =
   TimeValue UTCTime             |
   TimeDiffValue NominalDiffTime |
   PosValue i                    |
-  LiftHaskFun TypeVariable (CellRawExpr i) (CellRawExpr i) (ShowWrap (
-    (Either (CellExpr i) i -> Either (CellError i) (CellWithType i)) -> 
-    CellExpr i -> Either (CellError i) (CellRawExpr i))) deriving Show
+  LiftHaskFun TypeVariable (CellRawExpr i) (CellRawExpr i) (ShowWrap (CellRawExpr i -> CellExpr i)) deriving Show
 
 instance Eq i => Eq (CellRawValue i) where
   TypeValue     x == TypeValue     y = x == y
@@ -114,11 +112,10 @@ instance Show i => Buildable (CellError i) where
   build (RE e) = fromString (show e)
 
 data CellValue i =
-  RawValue (CellRawValue i)              |
-  RefValue i                             |
+  RawValue (CellRawValue i)           |
+  RefValue i                          |
   ListValue (CellExpr i) [CellExpr i] |
-  NamedRefValue NamedReference {- |
-  Auto CellExpr CellExpr       -}deriving Show
+  NamedRefValue NamedReference        deriving Show
 
 instance Buildable CellIndex where
   build (CellIndex (i1, i2)) = fromString (show i1) <> "," <> fromString (show i2)

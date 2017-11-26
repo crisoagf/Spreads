@@ -9,44 +9,35 @@ import Data.Time
 
 type CellRawExprWError i = Either (CellError i) (CellRawExpr i)
 
-liftHaskFnType :: Text -> Text -> CellRawExpr i -> (CellRawExpr i -> CellRawExprWError i) -> CellRawExpr i
-liftHaskFnType fname tname restype f = Embed $ LiftHaskFun tname (Const Star) restype (ShowWrap (unpack fname) (\ evalFn ->
-    (evalFn . Left) >=>
-    (\case
-      CellWithType (Const Star) expr -> f expr
-      CellWithType t _ -> error (unpack fname ++ ": The Spread type system has failed us! We wanted a Type, but it gave us a " ++ show t))))
+liftHaskFnType :: Text -> Text -> CellRawExpr i -> (CellRawExpr i -> CellExpr i) -> CellRawExpr i
+liftHaskFnType fname tname restype f = Embed $ LiftHaskFun tname (Const Star) restype (ShowWrap (unpack fname) f)
 
-liftHaskFnPos :: Show i => Text -> CellRawExpr i -> ((Either (CellExpr i) i -> Either (CellError i) (CellWithType i)) -> i -> CellRawExprWError i) -> CellRawExpr i
-liftHaskFnPos fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Pos) restype (ShowWrap (unpack fname) (\ evalFn ->
-    (evalFn . Left) >=>
-    (\case
-      CellWithType (Embed Pos) (Embed (PosValue i)) -> f evalFn i
-      CellWithType t _ -> error (unpack fname ++ ": The Spread type system has failed us! We wanted a Pos, but it gave us a " ++ show t))))
+liftHaskFnPos :: Show i => Text -> CellRawExpr i -> (i -> CellExpr i) -> CellRawExpr i
+liftHaskFnPos fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Pos) restype (ShowWrap (unpack fname)
+  (\case
+    Embed (PosValue x) -> f x
+    _ -> error "Error in Spread lifting algorithm, please file a bug report!"))
 
-liftHaskFnInt :: Show i => Text -> CellRawExpr i -> ((Either (CellExpr i) i -> Either (CellError i) (CellWithType i)) -> Int -> CellRawExprWError i) -> CellRawExpr i
-liftHaskFnInt fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Int) restype (ShowWrap (unpack fname) (\ evalFn ->
-    (evalFn . Left) >=>
-    (\case
-      CellWithType (Embed Int) (Embed (IntValue i)) -> f evalFn i
-      CellWithType t _ -> error (unpack fname ++ ": The Spread type system has failed us! We wanted an Int, but it gave us a " ++ show t))))
+liftHaskFnInt :: Show i => Text -> CellRawExpr i -> (Int -> CellExpr i) -> CellRawExpr i
+liftHaskFnInt fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Int) restype (ShowWrap (unpack fname)
+  (\case
+    Embed (IntValue x) -> f x
+    _ -> error "Error in Spread lifting algorithm, please file a bug report!"))
 
-liftHaskFnDate :: Show i => Text -> CellRawExpr i -> ((Either (CellExpr i) i -> Either (CellError i) (CellWithType i)) -> Day -> CellRawExprWError i) -> CellRawExpr i
-liftHaskFnDate fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Date) restype (ShowWrap (unpack fname) (\ evalFn ->
-    (evalFn . Left) >=>
-    (\case
-      CellWithType (Embed Date) (Embed (DateValue i)) -> f evalFn i
-      CellWithType t _ -> error (unpack fname ++ ": The Spread type system has failed us! We wanted a Date, but it gave us a " ++ show t))))
+liftHaskFnDate :: Show i => Text -> CellRawExpr i -> (Day -> CellExpr i) -> CellRawExpr i
+liftHaskFnDate fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Date) restype (ShowWrap (unpack fname)
+  (\case
+    Embed (DateValue x) -> f x
+    _ -> error "Error in Spread lifting algorithm, please file a bug report!"))
 
-liftHaskFnTimeDiff :: Show i => Text -> CellRawExpr i -> ((Either (CellExpr i) i -> Either (CellError i) (CellWithType i)) -> NominalDiffTime -> CellRawExprWError i) -> CellRawExpr i
-liftHaskFnTimeDiff fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue TimeDiff) restype (ShowWrap (unpack fname) (\ evalFn ->
-    (evalFn . Left) >=>
-    (\case
-      CellWithType (Embed TimeDiff) (Embed (TimeDiffValue i)) -> f evalFn i
-      CellWithType t _ -> error (unpack fname ++ ": The Spread type system has failed us! We wanted a TimeDiff, but it gave us a " ++ show t))))
+liftHaskFnTimeDiff :: Show i => Text -> CellRawExpr i -> (NominalDiffTime -> CellExpr i) -> CellRawExpr i
+liftHaskFnTimeDiff fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue TimeDiff) restype (ShowWrap (unpack fname)
+  (\case
+    Embed (TimeDiffValue x) -> f x
+    _ -> error "Error in Spread lifting algorithm, please file a bug report!"))
 
-liftHaskFnTime :: Show i => Text -> CellRawExpr i -> ((Either (CellExpr i) i -> Either (CellError i) (CellWithType i)) -> UTCTime -> CellRawExprWError i) -> CellRawExpr i
-liftHaskFnTime fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Time) restype (ShowWrap (unpack fname) (\ evalFn ->
-    (evalFn . Left) >=>
-    (\case
-      CellWithType (Embed Time) (Embed (TimeValue i)) -> f evalFn i
-      CellWithType t _ -> error (unpack fname ++ ": The Spread type system has failed us! We wanted a TimeDiff, but it gave us a " ++ show t))))
+liftHaskFnTime :: Show i => Text -> CellRawExpr i -> (UTCTime -> CellExpr i) -> CellRawExpr i
+liftHaskFnTime fname restype f = Embed $ LiftHaskFun "" (Embed $ TypeValue Time) restype (ShowWrap (unpack fname)
+  (\case
+    Embed (TimeValue x) -> f x
+    _ -> error "Error in Spread lifting algorithm, please file a bug report!"))
